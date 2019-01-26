@@ -1,0 +1,185 @@
+# Read in the data
+# Since working with text data here, extra argument stringAsFactors=FALSE
+# Avg = Average setiment score
+tweets = read.csv("tweets.csv", stringsAsFactors = FALSE)
+str(tweets)
+
+# Create dependent variable
+# more interested to detect the tweets with clear negative sentiment,
+# define a new variable in data set tweets called Negative
+tweets$Negative = as.factor(tweets$Avg <= -1)
+# This will set tweet$Negative equal to ture if the average sentiment score
+# set tweets$Negative equal to false if the average sentiment score > -1
+table(tweets$Negative)
+
+# 182 of the 1,181 tweets, or about 15%, are negative.
+# Pre-process the data to use Bag of Words
+# Install new packages
+install.packages("tm")
+library(tm)
+install.packages("SnowballC") #helps to use the tm package
+library(SnowballC)
+
+# Corpus : concept introduced by the tm package
+# Corpus : collection of documents
+# Convert the tweets to a corpus for  pre-processing
+# we will use tweets column of data frame using two functions corpus and VectorSource
+# Create corpus
+corpus = VCorpus(VectorSource(tweets$Tweet))
+
+# Look at corpus
+corpus
+# check that the documents match the tweets
+# Shows first tweet in corpus
+corpus[[1]]$content
+
+# Start pre-processing the data
+# Streaming, removing stop words
+# Convert to lower-case
+# tm_map(name of our corpus, whata we want to do)
+corpus = tm_map(corpus, content_transformer(tolower))
+corpus[[1]]$content
+
+# Remove punctuation
+corpus = tm_map(corpus, removePunctuation)
+corpus[[1]]$content
+
+# tm provides a list of stop words
+# Look at stop words
+stopwords("english")[1:100]
+
+
+# Remove stopwards and aapple
+# tm_map function with one extra argument
+# i.e. what the stop words are that we want to remove
+# Remove all the english stop words + Apple
+# Remove Apple coz: all of these tweets have the word "apple"
+# and it won't be very useful in our prediction.
+corpus = tm_map(corpus, removeWords, c("apple", stopwords("english")))
+corpus[[1]]$content
+# Significantly fewer words or only the words which are not stop words
+# Stem document (remove words like ed, e etc)
+corpus = tm_map(corpus, stemDocument)
+corpus[[1]]$content
+
+
+
+# Investigate the corpus $ prepare it for prediction problem
+# DocumentTermMatrix : tm package provides a function that generates a matrix where
+# rows->documents, in our case tweets,
+# column->words in those tweets.
+# The values in the matrix are the number of times that word appears in each document
+
+# Create matrix
+frequencies = DocumentTermMatrix(corpus)
+frequencies
+
+# (documents/tweets : 1181, terms/words : 3289) after pre-processing
+# Look at matrix
+# Inspect : to see the matrix
+# Inspect(frequencies(documents, words))
+inspect(frequencies[1000:1005, 505:515])
+
+
+# This data is sparse i.e. we have many zeros in our matrix
+# Cehck for sparsity
+# findFreqTerms : function to check most popular terms
+# findFreqTerms(matrix, lowfreq=minimum numver of times a term must appear to be display)
+findFreqTerms(frequencies, lowfreq = 20) # 56 different words
+
+# So out of the 3,290 words in our matrix, 
+# only 56 words appear at least 20 times in the tweets.
+
+# This means we have a lot of terms that will be pretty useless for our prediction model
+# The number of terms is on issue for two main reasons.
+# 1. computational : More terms means more independent variables,
+# which usually means it takes longer to build our models.
+# 2. The other is in building models, the ratio of independent variables to boeservations
+# will affect how good the model will generalize.
+
+# Remove the terms which don't appear that often.
+# Remove sparse terms
+# removeSparseTerms(name of matrix, sparsity threshold)
+# sparsity threshold works as :
+# If we say 0.98, this means to only keep terms that appear in 2% or more of the tweet
+# If we say 0.99, this means to only keep terms that appear in 1% or more of the tweet
+# If we say 0.995, this means to only keep terms that appear in 0.5% or more of the tweet
+# about six or more tweets.
+sparse = removeSparseTerms(frequencies, 0.995)
+sparse # only has 309 words = 9% of the previous count of 3289 words
+
+# Convert matric to a data frame to use for the predictive model
+tweetsSparse = as.factor(as.matrix(sparse))
+
+# Make all variable names R-friendly
+# Because R struggles with variable names that start with a number
+# make.names : to makes sure all bariables are R friendly
+# Do this each time you've built a data frame using text analytics.
+colnames(tweetsSparse) = make.names(colnames(tweetsSparse))
+
+
+# Add dependent varibale
+# tweetsSparse$Negative and set it equal to the original Negative variable from the tweets data frame.
+tweetsSparse$Negative = tweets$Negative
+
+# Split the data into training set and ttest set
+library(caTools)  # to use the sample.split functino
+set.seed(123)
+# Sample.split(dependent variable, SplitRatio = put 70% of data in training set)
+split = sample.split(tweetsSparse$Negative, SplitRatio = 0.7)
+
+# Use subset to create a training subset and test subset
+trainSparse = subset(tweetsSparse, split==TRUE)
+testSparse = subset(tweetsSparse, split==FALSE)
+
+
+
+# Build a CART model
+library(rpart)
+library(rpart.plot)
+
+# using the default parameter settings, Therefore, not using anything for minbucket or
+tweetCART = rpart(Negative ~ ., data=trainSparse, method="class")
+prp(tweetCART)  # plot the tree
+
+# tree says that if the word "freak" is in the tweet,
+#
+
+
+# Evalueate teh performance of the model by making predictions
+predictCART = predict(tweetCART, newdata=testSparse, type="class")
+
+# Confusion Matric using table function
+# table(acutal outcome, predictions)
+table(testSparse$Negative, prdictCART)
+
+# Compute accuracy
+(294+18)/(294+6+37+18) # 0.88
+
+# Baseline accuracy : always predicts non negative
+# Just the table of outcome variable negative.
+table(testSparse$Negative)
+# FALSE TRUE
+# 300   55
+# Accuracy of baseline model that always predicts
+
+
+# CART model does better than simple baseline model
+# Random forest 
+set.seed(123)# Even of you set the seed to 123
+# different outcome is possible depending on your operating system
+# Again using the default parameter settings
+# RF model takes longer to build, Here the time is even more drastic
+# This is because we have so many indenpendent variables, about 300 different words.
+# In text analytics
+predictRF = predict 
+
+
+
+
+
+
+
+
+
+
